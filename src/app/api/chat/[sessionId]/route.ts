@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,7 +14,7 @@ export async function GET(
     }
 
     const userId = (session.user as { id: string }).id;
-    const { sessionId } = params;
+    const { sessionId } = await params;
 
     const chatSession = await prisma.chatSession.findUnique({
       where: { id: sessionId, userId },
@@ -50,7 +50,7 @@ export async function GET(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -59,7 +59,7 @@ export async function DELETE(
     }
 
     const userId = (session.user as { id: string }).id;
-    const { sessionId } = params;
+    const { sessionId } = await params;
 
     const chatSession = await prisma.chatSession.findUnique({
       where: { id: sessionId, userId },

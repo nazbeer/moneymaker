@@ -41,7 +41,7 @@ function CustomTooltip({
   );
 }
 
-export default function MoodChart() {
+export default function MoodChart({ data: externalData }: { data?: MoodData[] } = {}) {
   const [data, setData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 

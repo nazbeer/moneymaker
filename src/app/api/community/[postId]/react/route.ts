@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { postId: string } }
+  { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,7 +14,7 @@ export async function POST(
     }
 
     const userId = (session.user as { id: string }).id;
-    const { postId } = params;
+    const { postId } = await params;
     const { type } = await req.json();
 
     if (!type) {

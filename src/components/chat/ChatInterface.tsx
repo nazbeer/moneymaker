@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Loader2 } from "lucide-react";
 import type { ChatMessageData } from "@/lib/types";
 
-export default function ChatInterface() {
+export default function ChatInterface({ sessionId }: { sessionId: string }) {
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);

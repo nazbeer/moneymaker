@@ -67,8 +67,8 @@ export default function CommunityPage() {
     setIsLoadingMore(false);
   };
 
-  const handlePostCreated = (newPost: CommunityPostData) => {
-    setPosts((prev) => [newPost, ...prev]);
+  const handlePostCreated = () => {
+    fetchPosts(1, activeCategory);
   };
 
   if (status === "loading") {

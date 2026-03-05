@@ -4,8 +4,9 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { MOOD_EMOJIS, MOOD_TAGS } from "@/lib/constants";
 import Button from "@/components/ui/Button";
+import type { MoodData } from "@/lib/types";
 
-export default function MoodLogger() {
+export default function MoodLogger({ onMoodLogged }: { onMoodLogged?: (mood: MoodData) => void } = {}) {
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [note, setNote] = useState("");

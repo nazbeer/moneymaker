@@ -5,9 +5,9 @@ import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { SYSTEM_PROMPT, FREE_CHAT_LIMIT } from "@/lib/constants";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     ];
 
     // Stream response
-    const stream = await openai.chat.completions.create({
+    const stream = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       messages,
       stream: true,
