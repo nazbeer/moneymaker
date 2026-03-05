@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: healmind
+      POSTGRES_PASSWORD: healmind_password
+      POSTGRES_DB: healmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://healmind:healmind_password@db:5432/healmind?schema=public
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
