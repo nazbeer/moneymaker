@@ -10,7 +10,11 @@ The package overrides pin Effect and its Vitest integration to Composer's
 compatible `4.0.0-rc.115` release. Without these pins, Prisma 8's transitive
 Alchemy dependency can select incompatible stable Effect packages and fail
 cloud installation with `ERESOLVE`. Keep the overrides until upstream packages
-agree on a compatible Effect version; do not bypass peer checks.
+agree on a compatible Effect version. The root `.npmrc` enables
+`legacy-peer-deps` for root installs, including CI and Docker. This skips peer
+dependency enforcement; it does not guarantee compatibility, so retain the
+overrides. The separate backend and mobile projects do not inherit the root
+npm configuration when installed from their own directories.
 
 Install from the repository root with `npm ci`, and install the separate
 backend with `cd backend && npm ci`. Each application loads its own `.env`;
