@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import crypto from "crypto";
-import { prisma } from "../lib/prisma";
+import { prisma, withDates } from "../lib/prisma";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -8,11 +8,12 @@ const router = Router();
 router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const apiKeys = await prisma.apiKey.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, key: true, isActive: true, createdAt: true },
-    });
+    const apiKeys = await prisma.orm.public.ApiKey
+      .where({ userId })
+      .orderBy((row) => row.createdAt.desc())
+      .select("id", "name", "key", "isActive", "createdAt")
+      .all()
+      .then(withDates);
 
     const maskedKeys = apiKeys.map((apiKey) => ({
       ...apiKey,
@@ -37,9 +38,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 
     const key = `hm_${crypto.randomUUID().replace(/-/g, "")}`;
 
-    const apiKey = await prisma.apiKey.create({
-      data: { userId, name, key },
-    });
+    const apiKey = await prisma.orm.public.ApiKey
+      .create({ userId, name, key })
+      .then(withDates);
 
     return res.status(201).json({
       id: apiKey.id,
@@ -62,15 +63,20 @@ router.delete("/", requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "API key ID is required" });
     }
 
-    const apiKey = await prisma.apiKey.findUnique({
-      where: { id: keyId, userId },
-    });
+    const apiKey = await prisma.orm.public.ApiKey
+      .where({ id: keyId, userId })
+      .first()
+      .then(withDates);
 
     if (!apiKey) {
       return res.status(404).json({ error: "API key not found" });
     }
 
-    await prisma.apiKey.delete({ where: { id: keyId } });
+    await prisma.orm.public.ApiKey
+      .where({ id: keyId })
+      .delete()
+      .then((row) => { if (!row) throw new Error("Record not found for delete"); return row; })
+      .then(withDates);
     return res.json({ message: "API key deleted" });
   } catch (error) {
     console.error("Delete API key error:", error);

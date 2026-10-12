@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, timestamp, withDates } from "@/lib/prisma";
 
 async function authenticateApiKey(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -8,10 +8,11 @@ async function authenticateApiKey(req: NextRequest) {
   }
 
   const key = authHeader.slice(7);
-  const apiKey = await prisma.apiKey.findUnique({
-    where: { key, isActive: true },
-    include: { user: { select: { id: true } } },
-  });
+  const apiKey = await prisma.orm.public.ApiKey
+    .where({ key, isActive: true })
+    .include("user", (related) => related.select("id"))
+    .first()
+    .then(withDates);
 
   return apiKey;
 }
@@ -19,7 +20,7 @@ async function authenticateApiKey(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const apiKey = await authenticateApiKey(req);
-    if (!apiKey) {
+    if (!apiKey?.user) {
       return NextResponse.json(
         { error: "Invalid or missing API key" },
         { status: 401 }
@@ -36,14 +37,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const moodEntry = await prisma.moodEntry.create({
-      data: {
-        userId,
-        mood,
-        note: note || null,
-        tags: tags || [],
-      },
-    });
+    const moodEntry = await prisma.orm.public.MoodEntry
+      .create({ userId, mood, note: note || null, tags: tags || [] })
+      .then(withDates);
 
     return NextResponse.json(moodEntry, { status: 201 });
   } catch (error) {
@@ -58,7 +54,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const apiKey = await authenticateApiKey(req);
-    if (!apiKey) {
+    if (!apiKey?.user) {
       return NextResponse.json(
         { error: "Invalid or missing API key" },
         { status: 401 }
@@ -72,20 +68,13 @@ export async function GET(req: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const moods = await prisma.moodEntry.findMany({
-      where: {
-        userId,
-        createdAt: { gte: since },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        mood: true,
-        note: true,
-        tags: true,
-        createdAt: true,
-      },
-    });
+    const moods = await prisma.orm.public.MoodEntry
+      .where((row) => row.createdAt.gte(timestamp(since)))
+      .where({ userId })
+      .orderBy((row) => row.createdAt.desc())
+      .select("id", "mood", "note", "tags", "createdAt")
+      .all()
+      .then(withDates);
 
     return NextResponse.json(moods);
   } catch (error) {

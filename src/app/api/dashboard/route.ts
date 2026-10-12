@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, timestamp, withDates } from "@/lib/prisma";
 
 export async function GET() {
   try {
@@ -17,24 +17,29 @@ export async function GET() {
 
     const [totalMoods, totalChats, totalJournals, streak, recentMoods] =
       await Promise.all([
-        prisma.moodEntry.count({ where: { userId } }),
-        prisma.chatSession.count({ where: { userId } }),
-        prisma.journalEntry.count({ where: { userId } }),
-        prisma.healingStreak.findUnique({ where: { userId } }),
-        prisma.moodEntry.findMany({
-          where: {
-            userId,
-            createdAt: { gte: thirtyDaysAgo },
-          },
-          orderBy: { createdAt: "asc" },
-          select: {
-            id: true,
-            mood: true,
-            note: true,
-            tags: true,
-            createdAt: true,
-          },
-        }),
+        prisma.orm.public.MoodEntry
+          .where({ userId })
+          .aggregate((aggregate) => ({ count: aggregate.count() }))
+          .then((result) => result.count),
+        prisma.orm.public.ChatSession
+          .where({ userId })
+          .aggregate((aggregate) => ({ count: aggregate.count() }))
+          .then((result) => result.count),
+        prisma.orm.public.JournalEntry
+          .where({ userId })
+          .aggregate((aggregate) => ({ count: aggregate.count() }))
+          .then((result) => result.count),
+        prisma.orm.public.HealingStreak
+          .where({ userId })
+          .first()
+          .then(withDates),
+        prisma.orm.public.MoodEntry
+          .where((row) => row.createdAt.gte(timestamp(thirtyDaysAgo)))
+          .where({ userId })
+          .orderBy((row) => row.createdAt.asc())
+          .select("id", "mood", "note", "tags", "createdAt")
+          .all()
+          .then(withDates),
       ]);
 
     const avgMood =

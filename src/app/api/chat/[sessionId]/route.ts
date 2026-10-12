@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withDates } from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
@@ -16,20 +16,11 @@ export async function GET(
     const userId = (session.user as { id: string }).id;
     const { sessionId } = await params;
 
-    const chatSession = await prisma.chatSession.findUnique({
-      where: { id: sessionId, userId },
-      include: {
-        messages: {
-          orderBy: { createdAt: "asc" },
-          select: {
-            id: true,
-            role: true,
-            content: true,
-            createdAt: true,
-          },
-        },
-      },
-    });
+    const chatSession = await prisma.orm.public.ChatSession
+      .where({ id: sessionId, userId })
+      .include("messages", (related) => related.orderBy((row) => row.createdAt.asc()).select("id", "role", "content", "createdAt"))
+      .first()
+      .then(withDates);
 
     if (!chatSession) {
       return NextResponse.json(
@@ -61,9 +52,10 @@ export async function DELETE(
     const userId = (session.user as { id: string }).id;
     const { sessionId } = await params;
 
-    const chatSession = await prisma.chatSession.findUnique({
-      where: { id: sessionId, userId },
-    });
+    const chatSession = await prisma.orm.public.ChatSession
+      .where({ id: sessionId, userId })
+      .first()
+      .then(withDates);
 
     if (!chatSession) {
       return NextResponse.json(
@@ -72,9 +64,11 @@ export async function DELETE(
       );
     }
 
-    await prisma.chatSession.delete({
-      where: { id: sessionId },
-    });
+    await prisma.orm.public.ChatSession
+      .where({ id: sessionId })
+      .delete()
+      .then((row) => { if (!row) throw new Error("Record not found for delete"); return row; })
+      .then(withDates);
 
     return NextResponse.json({ message: "Chat session deleted" });
   } catch (error) {

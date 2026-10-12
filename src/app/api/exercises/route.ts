@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withDates } from "@/lib/prisma";
 import { HEALING_EXERCISES } from "@/lib/constants";
 
 export async function GET(req: NextRequest) {
@@ -15,10 +15,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { isPremium: true },
-    });
+    const user = await prisma.orm.public.User
+      .where({ id: userId })
+      .select("isPremium")
+      .first()
+      .then(withDates);
 
     let exercises = HEALING_EXERCISES;
 

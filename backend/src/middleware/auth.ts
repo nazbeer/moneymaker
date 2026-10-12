@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { prisma } from "../lib/prisma";
+import { prisma, withDates } from "../lib/prisma";
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -38,12 +38,13 @@ export async function requireApiKey(req: AuthRequest, res: Response, next: NextF
   const key = authHeader.slice(7);
 
   try {
-    const apiKey = await prisma.apiKey.findUnique({
-      where: { key, isActive: true },
-      include: { user: { select: { id: true, isPremium: true, name: true } } },
-    });
+    const apiKey = await prisma.orm.public.ApiKey
+      .where({ key, isActive: true })
+      .include("user", (related) => related.select("id", "isPremium", "name"))
+      .first()
+      .then(withDates);
 
-    if (!apiKey) {
+    if (!apiKey?.user) {
       return res.status(401).json({ error: "Invalid or missing API key" });
     }
 

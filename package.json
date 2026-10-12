@@ -7,14 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
-    "db:push": "prisma db push",
-    "db:seed": "ts-node prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "test:db": "tsx --test tests/prisma*.test.ts",
+    "postinstall": "prisma contract emit",
+    "db:generate": "prisma contract emit",
+    "db:init": "prisma db init",
+    "db:push": "prisma db update",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "node scripts/prisma-studio.mjs"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.1",
-    "@prisma/client": "^5.22.0",
+    "@prisma/orm-postgres": "8.0.0-rc.17",
+    "dotenv": "^17.4.2",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.35.0",
@@ -22,7 +25,7 @@
     "next": "16.1.6",
     "next-auth": "^4.24.13",
     "openai": "^6.25.0",
-    "prisma": "^5.22.0",
+    "prisma": "8.0.0-rc.22",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
@@ -39,6 +42,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   }
 }

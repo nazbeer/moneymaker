@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import OpenAI from "openai";
-import { prisma } from "../lib/prisma";
+import { prisma, timestamp, withDates } from "../lib/prisma";
 import { SYSTEM_PROMPT, FREE_CHAT_LIMIT } from "../lib/constants";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 
@@ -20,17 +20,20 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     // Check chat limits for free users
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { isPremium: true },
-    });
+    const user = await prisma.orm.public.User
+      .where({ id: userId })
+      .select("isPremium")
+      .first()
+      .then(withDates);
 
     if (!user?.isPremium) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayChats = await prisma.chatSession.count({
-        where: { userId, createdAt: { gte: today } },
-      });
+      const todayChats = await prisma.orm.public.ChatSession
+        .where((row) => row.createdAt.gte(timestamp(today)))
+        .where({ userId })
+        .aggregate((aggregate) => ({ count: aggregate.count() }))
+        .then((result) => result.count);
       if (!sessionId && todayChats >= FREE_CHAT_LIMIT) {
         return res.status(429).json({
           error: "Daily chat limit reached. Upgrade to Premium for unlimited chats.",
@@ -42,24 +45,25 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     // Get or create chat session
     let chatSession;
     if (sessionId) {
-      chatSession = await prisma.chatSession.findUnique({
-        where: { id: sessionId, userId },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
-      });
+      chatSession = await prisma.orm.public.ChatSession
+        .where({ id: sessionId, userId })
+        .include("messages", (related) => related.orderBy((row) => row.createdAt.asc()))
+        .first()
+        .then(withDates);
       if (!chatSession) {
         return res.status(404).json({ error: "Chat session not found" });
       }
     } else {
-      chatSession = await prisma.chatSession.create({
-        data: { userId, title: message.slice(0, 50) },
-        include: { messages: true },
-      });
+      chatSession = await prisma.orm.public.ChatSession
+        .include("messages")
+        .create({ userId, title: message.slice(0, 50) })
+        .then(withDates);
     }
 
     // Save user message
-    await prisma.chatMessage.create({
-      data: { chatSessionId: chatSession.id, role: "user", content: message },
-    });
+    await prisma.orm.public.ChatMessage
+      .create({ chatSessionId: chatSession.id, role: "user", content: message })
+      .then(withDates);
 
     // Build message history
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -93,9 +97,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     // Save assistant message
-    await prisma.chatMessage.create({
-      data: { chatSessionId: chatSession.id, role: "assistant", content: fullResponse },
-    });
+    await prisma.orm.public.ChatMessage
+      .create({ chatSessionId: chatSession.id, role: "assistant", content: fullResponse })
+      .then(withDates);
 
     res.write(`data: ${JSON.stringify({ done: true, sessionId: chatSession.id })}\n\n`);
     res.end();
@@ -108,17 +112,14 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
 router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const chatSessions = await prisma.chatSession.findMany({
-      where: { userId },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: { select: { messages: true } },
-      },
-    });
+    const chatSessions = await prisma.orm.public.ChatSession
+      .where({ userId })
+      .orderBy((row) => row.updatedAt.desc())
+      .select("id", "title", "createdAt", "updatedAt")
+      .include("messages", (related) => related.count())
+      .all()
+      .then((rows) => rows.map(({ messages, ...row }) => ({ ...row, _count: { messages } })))
+      .then(withDates);
     return res.json(chatSessions);
   } catch (error) {
     console.error("Get chat sessions error:", error);
@@ -131,15 +132,11 @@ router.get("/:sessionId", requireAuth, async (req: AuthRequest, res: Response) =
     const userId = req.userId!;
     const sessionId = req.params.sessionId as string;
 
-    const chatSession = await prisma.chatSession.findUnique({
-      where: { id: sessionId, userId },
-      include: {
-        messages: {
-          orderBy: { createdAt: "asc" },
-          select: { id: true, role: true, content: true, createdAt: true },
-        },
-      },
-    });
+    const chatSession = await prisma.orm.public.ChatSession
+      .where({ id: sessionId, userId })
+      .include("messages", (related) => related.orderBy((row) => row.createdAt.asc()).select("id", "role", "content", "createdAt"))
+      .first()
+      .then(withDates);
 
     if (!chatSession) {
       return res.status(404).json({ error: "Chat session not found" });
@@ -157,15 +154,20 @@ router.delete("/:sessionId", requireAuth, async (req: AuthRequest, res: Response
     const userId = req.userId!;
     const sessionId = req.params.sessionId as string;
 
-    const chatSession = await prisma.chatSession.findUnique({
-      where: { id: sessionId, userId },
-    });
+    const chatSession = await prisma.orm.public.ChatSession
+      .where({ id: sessionId, userId })
+      .first()
+      .then(withDates);
 
     if (!chatSession) {
       return res.status(404).json({ error: "Chat session not found" });
     }
 
-    await prisma.chatSession.delete({ where: { id: sessionId } });
+    await prisma.orm.public.ChatSession
+      .where({ id: sessionId })
+      .delete()
+      .then((row) => { if (!row) throw new Error("Record not found for delete"); return row; })
+      .then(withDates);
     return res.json({ message: "Chat session deleted" });
   } catch (error) {
     console.error("Delete chat session error:", error);

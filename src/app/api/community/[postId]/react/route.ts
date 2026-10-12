@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withDates } from "@/lib/prisma";
 
 export async function POST(
   req: NextRequest,
@@ -25,39 +25,33 @@ export async function POST(
     }
 
     // Check if post exists
-    const post = await prisma.communityPost.findUnique({
-      where: { id: postId },
-    });
+    const post = await prisma.orm.public.CommunityPost
+      .where({ id: postId })
+      .first()
+      .then(withDates);
 
     if (!post) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
     // Toggle reaction: remove if exists, create if not
-    const existingReaction = await prisma.reaction.findUnique({
-      where: {
-        userId_postId_type: {
-          userId,
-          postId,
-          type,
-        },
-      },
-    });
+    const existingReaction = await prisma.orm.public.Reaction
+      .where({ userId, postId, type })
+      .first()
+      .then(withDates);
 
     if (existingReaction) {
-      await prisma.reaction.delete({
-        where: { id: existingReaction.id },
-      });
+      await prisma.orm.public.Reaction
+        .where({ id: existingReaction.id })
+        .delete()
+        .then((row) => { if (!row) throw new Error("Record not found for delete"); return row; })
+        .then(withDates);
       return NextResponse.json({ action: "removed", type });
     }
 
-    await prisma.reaction.create({
-      data: {
-        userId,
-        postId,
-        type,
-      },
-    });
+    await prisma.orm.public.Reaction
+      .create({ userId, postId, type })
+      .then(withDates);
 
     return NextResponse.json({ action: "added", type }, { status: 201 });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import OpenAI from "openai";
-import { prisma } from "../lib/prisma";
+import { prisma, timestamp, withDates } from "../lib/prisma";
 import { SYSTEM_PROMPT, AFFIRMATIONS } from "../lib/constants";
 import { requireApiKey, AuthRequest } from "../middleware/auth";
 
@@ -21,23 +21,24 @@ router.post("/chat", requireApiKey, async (req: AuthRequest, res: Response) => {
 
     let chatSession;
     if (sessionId) {
-      chatSession = await prisma.chatSession.findUnique({
-        where: { id: sessionId, userId },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
-      });
+      chatSession = await prisma.orm.public.ChatSession
+        .where({ id: sessionId, userId })
+        .include("messages", (related) => related.orderBy((row) => row.createdAt.asc()))
+        .first()
+        .then(withDates);
       if (!chatSession) {
         return res.status(404).json({ error: "Chat session not found" });
       }
     } else {
-      chatSession = await prisma.chatSession.create({
-        data: { userId, title: message.slice(0, 50) },
-        include: { messages: true },
-      });
+      chatSession = await prisma.orm.public.ChatSession
+        .include("messages")
+        .create({ userId, title: message.slice(0, 50) })
+        .then(withDates);
     }
 
-    await prisma.chatMessage.create({
-      data: { chatSessionId: chatSession.id, role: "user", content: message },
-    });
+    await prisma.orm.public.ChatMessage
+      .create({ chatSessionId: chatSession.id, role: "user", content: message })
+      .then(withDates);
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: SYSTEM_PROMPT },
@@ -55,9 +56,9 @@ router.post("/chat", requireApiKey, async (req: AuthRequest, res: Response) => {
 
     const assistantMessage = completion.choices[0]?.message?.content || "";
 
-    await prisma.chatMessage.create({
-      data: { chatSessionId: chatSession.id, role: "assistant", content: assistantMessage },
-    });
+    await prisma.orm.public.ChatMessage
+      .create({ chatSessionId: chatSession.id, role: "assistant", content: assistantMessage })
+      .then(withDates);
 
     return res.json({ sessionId: chatSession.id, message: assistantMessage });
   } catch (error) {
@@ -75,9 +76,9 @@ router.post("/mood", requireApiKey, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Mood must be between 1 and 5" });
     }
 
-    const moodEntry = await prisma.moodEntry.create({
-      data: { userId, mood, note: note || null, tags: tags || [] },
-    });
+    const moodEntry = await prisma.orm.public.MoodEntry
+      .create({ userId, mood, note: note || null, tags: tags || [] })
+      .then(withDates);
 
     return res.status(201).json(moodEntry);
   } catch (error) {
@@ -93,11 +94,13 @@ router.get("/mood", requireApiKey, async (req: AuthRequest, res: Response) => {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const moods = await prisma.moodEntry.findMany({
-      where: { userId, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, mood: true, note: true, tags: true, createdAt: true },
-    });
+    const moods = await prisma.orm.public.MoodEntry
+      .where((row) => row.createdAt.gte(timestamp(since)))
+      .where({ userId })
+      .orderBy((row) => row.createdAt.desc())
+      .select("id", "mood", "note", "tags", "createdAt")
+      .all()
+      .then(withDates);
 
     return res.json(moods);
   } catch (error) {
@@ -113,20 +116,24 @@ router.get("/widget", requireApiKey, async (req: AuthRequest, res: Response) => 
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const [recentMoods, streak, user] = await Promise.all([
-      prisma.moodEntry.findMany({
-        where: { userId, createdAt: { gte: sevenDaysAgo } },
-        orderBy: { createdAt: "desc" },
-        take: 7,
-        select: { mood: true, createdAt: true },
-      }),
-      prisma.healingStreak.findUnique({
-        where: { userId },
-        select: { currentStreak: true },
-      }),
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true, isPremium: true },
-      }),
+      prisma.orm.public.MoodEntry
+        .where((row) => row.createdAt.gte(timestamp(sevenDaysAgo)))
+        .where({ userId })
+        .orderBy((row) => row.createdAt.desc())
+        .limit(7)
+        .select("mood", "createdAt")
+        .all()
+        .then(withDates),
+      prisma.orm.public.HealingStreak
+        .where({ userId })
+        .select("currentStreak")
+        .first()
+        .then(withDates),
+      prisma.orm.public.User
+        .where({ id: userId })
+        .select("name", "isPremium")
+        .first()
+        .then(withDates),
     ]);
 
     const randomAffirmation = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withDates } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,18 +20,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const post = await prisma.communityPost.create({
-      data: {
-        userId,
-        content,
-        category,
-        isAnonymous: isAnonymous ?? true,
-      },
-      include: {
-        user: { select: { name: true, image: true } },
-        _count: { select: { reactions: true } },
-      },
-    });
+    const post = await prisma.orm.public.CommunityPost
+      .include("user", (related) => related.select("name", "image"))
+      .include("reactions", (related) => related.count())
+      .create({ userId, content, category, isAnonymous: isAnonymous ?? true })
+      .then(({ reactions, ...row }) => ({ ...row, _count: { reactions } }))
+      .then(withDates);
 
     return NextResponse.json(post, { status: 201 });
   } catch (error) {
@@ -62,20 +56,20 @@ export async function GET(req: NextRequest) {
     }
 
     const [posts, total] = await Promise.all([
-      prisma.communityPost.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          user: { select: { name: true, image: true } },
-          reactions: {
-            select: { type: true, userId: true },
-          },
-          _count: { select: { reactions: true } },
-        },
-      }),
-      prisma.communityPost.count({ where }),
+      prisma.orm.public.CommunityPost
+        .where(where)
+        .orderBy((row) => row.createdAt.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .include("user", (related) => related.select("name", "image"))
+        .include("reactions", (related) => related.combine({ items: related.select("type", "userId"), total: related.count() }))
+        .all()
+        .then((rows) => rows.map(({ reactions, ...row }) => ({ ...row, reactions: reactions.items, _count: { reactions: reactions.total } })))
+        .then(withDates),
+      prisma.orm.public.CommunityPost
+        .where(where)
+        .aggregate((aggregate) => ({ count: aggregate.count() }))
+        .then((result) => result.count),
     ]);
 
     // Transform posts to include aggregated reactions and whether current user reacted

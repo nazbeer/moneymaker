@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma";
+import { prisma, withDates } from "../lib/prisma";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -13,13 +13,12 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Content and category are required" });
     }
 
-    const post = await prisma.communityPost.create({
-      data: { userId, content, category, isAnonymous: isAnonymous ?? true },
-      include: {
-        user: { select: { name: true, image: true } },
-        _count: { select: { reactions: true } },
-      },
-    });
+    const post = await prisma.orm.public.CommunityPost
+      .include("user", (related) => related.select("name", "image"))
+      .include("reactions", (related) => related.count())
+      .create({ userId, content, category, isAnonymous: isAnonymous ?? true })
+      .then(({ reactions, ...row }) => ({ ...row, _count: { reactions } }))
+      .then(withDates);
 
     return res.status(201).json(post);
   } catch (error) {
@@ -39,18 +38,20 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     if (category) where.category = category;
 
     const [posts, total] = await Promise.all([
-      prisma.communityPost.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          user: { select: { name: true, image: true } },
-          reactions: { select: { type: true, userId: true } },
-          _count: { select: { reactions: true } },
-        },
-      }),
-      prisma.communityPost.count({ where }),
+      prisma.orm.public.CommunityPost
+        .where(where)
+        .orderBy((row) => row.createdAt.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .include("user", (related) => related.select("name", "image"))
+        .include("reactions", (related) => related.combine({ items: related.select("type", "userId"), total: related.count() }))
+        .all()
+        .then((rows) => rows.map(({ reactions, ...row }) => ({ ...row, reactions: reactions.items, _count: { reactions: reactions.total } })))
+        .then(withDates),
+      prisma.orm.public.CommunityPost
+        .where(where)
+        .aggregate((aggregate) => ({ count: aggregate.count() }))
+        .then((result) => result.count),
     ]);
 
     const transformedPosts = posts.map((post) => {
@@ -98,21 +99,31 @@ router.post("/:postId/react", requireAuth, async (req: AuthRequest, res: Respons
       return res.status(400).json({ error: "Reaction type is required" });
     }
 
-    const post = await prisma.communityPost.findUnique({ where: { id: postId } });
+    const post = await prisma.orm.public.CommunityPost
+      .where({ id: postId })
+      .first()
+      .then(withDates);
     if (!post) {
       return res.status(404).json({ error: "Post not found" });
     }
 
-    const existingReaction = await prisma.reaction.findUnique({
-      where: { userId_postId_type: { userId, postId, type } },
-    });
+    const existingReaction = await prisma.orm.public.Reaction
+      .where({ userId, postId, type })
+      .first()
+      .then(withDates);
 
     if (existingReaction) {
-      await prisma.reaction.delete({ where: { id: existingReaction.id } });
+      await prisma.orm.public.Reaction
+        .where({ id: existingReaction.id })
+        .delete()
+        .then((row) => { if (!row) throw new Error("Record not found for delete"); return row; })
+        .then(withDates);
       return res.json({ action: "removed", type });
     }
 
-    await prisma.reaction.create({ data: { userId, postId, type } });
+    await prisma.orm.public.Reaction
+      .create({ userId, postId, type })
+      .then(withDates);
     return res.status(201).json({ action: "added", type });
   } catch (error) {
     console.error("Reaction error:", error);

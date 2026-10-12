@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { prisma } from "@/lib/prisma";
+import { prisma, timestamp, withDates } from "@/lib/prisma";
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -31,14 +31,11 @@ export async function POST(req: NextRequest) {
         const userId = session.metadata?.userId;
 
         if (userId) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: {
-              isPremium: true,
-              stripeCustomerId: session.customer as string,
-              subscriptionId: session.subscription as string,
-            },
-          });
+          await prisma.orm.public.User
+            .where({ id: userId })
+            .update({ isPremium: true, stripeCustomerId: session.customer as string, subscriptionId: session.subscription as string })
+            .then((row) => { if (!row) throw new Error("Record not found for update"); return row; })
+            .then(withDates);
         }
         break;
       }
@@ -47,14 +44,9 @@ export async function POST(req: NextRequest) {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
 
-        await prisma.user.updateMany({
-          where: { stripeCustomerId: customerId },
-          data: {
-            isPremium: false,
-            subscriptionId: null,
-            subscriptionEnd: new Date(),
-          },
-        });
+        await prisma.orm.public.User
+          .where({ stripeCustomerId: customerId })
+          .updateAndCount({ isPremium: false, subscriptionId: null, subscriptionEnd: timestamp(new Date()) });
         break;
       }
 

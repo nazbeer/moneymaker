@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { prisma } from "../lib/prisma";
+import { prisma, withDates } from "../lib/prisma";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -20,23 +20,19 @@ router.post("/register", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.orm.public.User
+      .where({ email })
+      .first()
+      .then(withDates);
     if (existingUser) {
       return res.status(409).json({ error: "An account with this email already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        healingStreak: {
-          create: { currentStreak: 0, longestStreak: 0 },
-        },
-      },
-    });
+    const user = await prisma.orm.public.User
+      .create({ name, email, password: hashedPassword, healingStreak: (related) => related.create({ currentStreak: 0, longestStreak: 0 }) })
+      .then(withDates);
 
     const token = generateToken({ id: user.id, email: user.email! });
 
@@ -59,7 +55,10 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.orm.public.User
+      .where({ email })
+      .first()
+      .then(withDates);
     if (!user || !user.password) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -88,17 +87,11 @@ router.post("/login", async (req: Request, res: Response) => {
 
 router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-        isPremium: true,
-        createdAt: true,
-      },
-    });
+    const user = await prisma.orm.public.User
+      .where({ id: req.userId })
+      .select("id", "name", "email", "image", "isPremium", "createdAt")
+      .first()
+      .then(withDates);
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });

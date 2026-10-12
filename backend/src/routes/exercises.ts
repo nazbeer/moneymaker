@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma";
+import { prisma, withDates } from "../lib/prisma";
 import { HEALING_EXERCISES } from "../lib/constants";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 
@@ -10,10 +10,11 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     const userId = req.userId!;
     const category = req.query.category as string | undefined;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { isPremium: true },
-    });
+    const user = await prisma.orm.public.User
+      .where({ id: userId })
+      .select("isPremium")
+      .first()
+      .then(withDates);
 
     let exercises = HEALING_EXERCISES;
     if (category) {

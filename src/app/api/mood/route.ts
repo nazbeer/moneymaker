@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, timestamp, withDates } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,22 +20,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const moodEntry = await prisma.moodEntry.create({
-      data: {
-        userId,
-        mood,
-        note: note || null,
-        tags: tags || [],
-      },
-    });
+    const moodEntry = await prisma.orm.public.MoodEntry
+      .create({ userId, mood, note: note || null, tags: tags || [] })
+      .then(withDates);
 
     // Update healing streak
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const streak = await prisma.healingStreak.findUnique({
-      where: { userId },
-    });
+    const streak = await prisma.orm.public.HealingStreak
+      .where({ userId })
+      .first()
+      .then(withDates);
 
     if (streak) {
       const lastActive = new Date(streak.lastActiveDate);
@@ -47,38 +43,29 @@ export async function POST(req: NextRequest) {
 
       if (diffDays === 1) {
         const newStreak = streak.currentStreak + 1;
-        await prisma.healingStreak.update({
-          where: { userId },
-          data: {
-            currentStreak: newStreak,
-            longestStreak: Math.max(newStreak, streak.longestStreak),
-            lastActiveDate: new Date(),
-          },
-        });
+        await prisma.orm.public.HealingStreak
+          .where({ userId })
+          .update({ currentStreak: newStreak, longestStreak: Math.max(newStreak, streak.longestStreak), lastActiveDate: timestamp(new Date()) })
+          .then((row) => { if (!row) throw new Error("Record not found for update"); return row; })
+          .then(withDates);
       } else if (diffDays > 1) {
-        await prisma.healingStreak.update({
-          where: { userId },
-          data: {
-            currentStreak: 1,
-            lastActiveDate: new Date(),
-          },
-        });
+        await prisma.orm.public.HealingStreak
+          .where({ userId })
+          .update({ currentStreak: 1, lastActiveDate: timestamp(new Date()) })
+          .then((row) => { if (!row) throw new Error("Record not found for update"); return row; })
+          .then(withDates);
       } else {
         // Same day, just update lastActiveDate
-        await prisma.healingStreak.update({
-          where: { userId },
-          data: { lastActiveDate: new Date() },
-        });
+        await prisma.orm.public.HealingStreak
+          .where({ userId })
+          .update({ lastActiveDate: timestamp(new Date()) })
+          .then((row) => { if (!row) throw new Error("Record not found for update"); return row; })
+          .then(withDates);
       }
     } else {
-      await prisma.healingStreak.create({
-        data: {
-          userId,
-          currentStreak: 1,
-          longestStreak: 1,
-          lastActiveDate: new Date(),
-        },
-      });
+      await prisma.orm.public.HealingStreak
+        .create({ userId, currentStreak: 1, longestStreak: 1, lastActiveDate: timestamp(new Date()) })
+        .then(withDates);
     }
 
     return NextResponse.json(moodEntry, { status: 201 });
@@ -105,20 +92,13 @@ export async function GET(req: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const moods = await prisma.moodEntry.findMany({
-      where: {
-        userId,
-        createdAt: { gte: since },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        mood: true,
-        note: true,
-        tags: true,
-        createdAt: true,
-      },
-    });
+    const moods = await prisma.orm.public.MoodEntry
+      .where((row) => row.createdAt.gte(timestamp(since)))
+      .where({ userId })
+      .orderBy((row) => row.createdAt.desc())
+      .select("id", "mood", "note", "tags", "createdAt")
+      .all()
+      .then(withDates);
 
     return NextResponse.json(moods);
   } catch (error) {

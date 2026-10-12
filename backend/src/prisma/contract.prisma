@@ -1,0 +1,168 @@
+// use prisma-8
+// Printed from src/prisma/contract.prisma by `prisma contract print`.
+
+namespace public {
+  model User {
+    id               String                                                    @id @default(cuid(2))
+    name             String?
+    email            String?
+    emailVerified    TimestampString(3)?
+    image            String?
+    password         String?
+    isPremium        Boolean                                                   @default(false)
+    stripeCustomerId String?
+    subscriptionId   String?
+    subscriptionEnd  TimestampString(3)?
+    createdAt        TimestampString(3)                                        @default(now())
+    updatedAt        temporal.timestampString(3, onCreate: now, onUpdate: now)
+    accounts         Account[]
+    apiKeys          ApiKey[]
+    chatSessions     ChatSession[]
+    communityPosts   CommunityPost[]
+    healingStreak    HealingStreak?
+    journalEntries   JournalEntry[]
+    moods            MoodEntry[]
+    reactions        Reaction[]
+    sessions         Session[]
+
+    @@index([email], map: "User_email_key", unique: true)
+  }
+
+  model Account {
+    id                String  @id @default(cuid(2))
+    userId            String
+    type              String
+    provider          String
+    providerAccountId String
+    refresh_token     String?
+    access_token      String?
+    expires_at        Int?
+    token_type        String?
+    scope             String?
+    id_token          String?
+    session_state     String?
+    user              User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@index([provider, providerAccountId], map: "Account_provider_providerAccountId_key", unique: true)
+  }
+
+  model Affirmation {
+    id       String @id @default(cuid(2))
+    content  String
+    category String
+  }
+
+  model ApiKey {
+    id        String             @id @default(cuid(2))
+    userId    String
+    key       String
+    name      String
+    isActive  Boolean            @default(true)
+    createdAt TimestampString(3) @default(now())
+    user      User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@index([key], map: "ApiKey_key_key", unique: true)
+  }
+
+  model ChatSession {
+    id        String                                                    @id @default(cuid(2))
+    userId    String
+    title     String                                                    @default("New Chat")
+    createdAt TimestampString(3)                                        @default(now())
+    updatedAt temporal.timestampString(3, onCreate: now, onUpdate: now)
+    messages  ChatMessage[]
+    user      User                                                      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+  }
+
+  model ChatMessage {
+    id            String             @id @default(cuid(2))
+    chatSessionId String
+    role          String
+    content       String
+    createdAt     TimestampString(3) @default(now())
+    chatSession   ChatSession        @relation(fields: [chatSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+  }
+
+  model CommunityPost {
+    id          String             @id @default(cuid(2))
+    userId      String
+    content     String
+    category    String
+    isAnonymous Boolean            @default(true)
+    createdAt   TimestampString(3) @default(now())
+    reactions   Reaction[]
+    user        User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+  }
+
+  model Exercise {
+    id          String    @id @default(cuid(2))
+    title       String
+    description String
+    category    String
+    duration    Int
+    steps       String[]? @noCheck(elementNotNull)
+    isPremium   Boolean   @default(false)
+  }
+
+  model HealingStreak {
+    id             String             @id @default(cuid(2))
+    userId         String
+    currentStreak  Int                @default(0)
+    longestStreak  Int                @default(0)
+    lastActiveDate TimestampString(3) @default(now())
+    user           User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+    @@index([userId], map: "HealingStreak_userId_key", unique: true)
+  }
+
+  model JournalEntry {
+    id        String             @id @default(cuid(2))
+    userId    String
+    prompt    String
+    content   String
+    category  String
+    createdAt TimestampString(3) @default(now())
+    user      User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+  }
+
+  model MoodEntry {
+    id        String             @id @default(cuid(2))
+    userId    String
+    mood      Int
+    note      String?
+    tags      String[]?          @noCheck(elementNotNull)
+    createdAt TimestampString(3) @default(now())
+    user      User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+  }
+
+  model Reaction {
+    id        String             @id @default(cuid(2))
+    userId    String
+    postId    String
+    type      String
+    createdAt TimestampString(3) @default(now())
+    user      User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: "Reaction_userId_postId_type_key")
+    post      CommunityPost      @relation(fields: [postId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@index([userId, postId, type], map: "Reaction_userId_postId_type_key", unique: true)
+  }
+
+  model Session {
+    id           String             @id @default(cuid(2))
+    sessionToken String
+    userId       String
+    expires      TimestampString(3)
+    user         User               @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@index([sessionToken], map: "Session_sessionToken_key", unique: true)
+  }
+
+  model VerificationToken {
+    identifier String
+    token      String
+    expires    TimestampString(3)
+
+    @@index([identifier, token], map: "VerificationToken_identifier_token_key", unique: true)
+    @@index([token], map: "VerificationToken_token_key", unique: true)
+  }
+}

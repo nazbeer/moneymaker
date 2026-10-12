@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withDates } from "@/lib/prisma";
 import OpenAI from "openai";
 import { SYSTEM_PROMPT } from "@/lib/constants";
 
@@ -14,10 +14,11 @@ async function authenticateApiKey(req: NextRequest) {
   }
 
   const key = authHeader.slice(7);
-  const apiKey = await prisma.apiKey.findUnique({
-    where: { key, isActive: true },
-    include: { user: { select: { id: true, isPremium: true } } },
-  });
+  const apiKey = await prisma.orm.public.ApiKey
+    .where({ key, isActive: true })
+    .include("user", (related) => related.select("id", "isPremium"))
+    .first()
+    .then(withDates);
 
   return apiKey;
 }
@@ -25,7 +26,7 @@ async function authenticateApiKey(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const apiKey = await authenticateApiKey(req);
-    if (!apiKey) {
+    if (!apiKey?.user) {
       return NextResponse.json(
         { error: "Invalid or missing API key" },
         { status: 401 }
@@ -46,10 +47,11 @@ export async function POST(req: NextRequest) {
     // Get or create chat session
     let chatSession;
     if (sessionId) {
-      chatSession = await prisma.chatSession.findUnique({
-        where: { id: sessionId, userId },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
-      });
+      chatSession = await prisma.orm.public.ChatSession
+        .where({ id: sessionId, userId })
+        .include("messages", (related) => related.orderBy((row) => row.createdAt.asc()))
+        .first()
+        .then(withDates);
 
       if (!chatSession) {
         return NextResponse.json(
@@ -58,23 +60,16 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      chatSession = await prisma.chatSession.create({
-        data: {
-          userId,
-          title: message.slice(0, 50),
-        },
-        include: { messages: true },
-      });
+      chatSession = await prisma.orm.public.ChatSession
+        .include("messages")
+        .create({ userId, title: message.slice(0, 50) })
+        .then(withDates);
     }
 
     // Save user message
-    await prisma.chatMessage.create({
-      data: {
-        chatSessionId: chatSession.id,
-        role: "user",
-        content: message,
-      },
-    });
+    await prisma.orm.public.ChatMessage
+      .create({ chatSessionId: chatSession.id, role: "user", content: message })
+      .then(withDates);
 
     // Build message history
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -94,13 +89,9 @@ export async function POST(req: NextRequest) {
     const assistantMessage = completion.choices[0]?.message?.content || "";
 
     // Save assistant message
-    await prisma.chatMessage.create({
-      data: {
-        chatSessionId: chatSession.id,
-        role: "assistant",
-        content: assistantMessage,
-      },
-    });
+    await prisma.orm.public.ChatMessage
+      .create({ chatSessionId: chatSession.id, role: "assistant", content: assistantMessage })
+      .then(withDates);
 
     return NextResponse.json({
       sessionId: chatSession.id,

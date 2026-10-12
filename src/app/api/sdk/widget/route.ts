@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, timestamp, withDates } from "@/lib/prisma";
 import { AFFIRMATIONS } from "@/lib/constants";
 
 export async function GET(req: NextRequest) {
@@ -13,20 +13,13 @@ export async function GET(req: NextRequest) {
     }
 
     const key = authHeader.slice(7);
-    const apiKey = await prisma.apiKey.findUnique({
-      where: { key, isActive: true },
-      include: {
-        user: {
-          select: {
-            id: true,
-            isPremium: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const apiKey = await prisma.orm.public.ApiKey
+      .where({ key, isActive: true })
+      .include("user", (related) => related.select("id", "isPremium", "name"))
+      .first()
+      .then(withDates);
 
-    if (!apiKey) {
+    if (!apiKey?.user) {
       return NextResponse.json(
         { error: "Invalid or missing API key" },
         { status: 401 }
@@ -40,24 +33,19 @@ export async function GET(req: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     const [recentMoods, streak] = await Promise.all([
-      prisma.moodEntry.findMany({
-        where: {
-          userId,
-          createdAt: { gte: sevenDaysAgo },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 7,
-        select: {
-          mood: true,
-          createdAt: true,
-        },
-      }),
-      prisma.healingStreak.findUnique({
-        where: { userId },
-        select: {
-          currentStreak: true,
-        },
-      }),
+      prisma.orm.public.MoodEntry
+        .where((row) => row.createdAt.gte(timestamp(sevenDaysAgo)))
+        .where({ userId })
+        .orderBy((row) => row.createdAt.desc())
+        .limit(7)
+        .select("mood", "createdAt")
+        .all()
+        .then(withDates),
+      prisma.orm.public.HealingStreak
+        .where({ userId })
+        .select("currentStreak")
+        .first()
+        .then(withDates),
     ]);
 
     const randomAffirmation =

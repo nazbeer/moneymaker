@@ -4,13 +4,8 @@
     "slug": "healmind",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "scheme": "healmind",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "backgroundColor": "#7C3AED"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.healmind.app"
@@ -21,6 +16,22 @@
       },
       "package": "com.healmind.app"
     },
-    "plugins": ["expo-router", "expo-secure-store"]
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#7C3AED"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
+    ]
   }
 }

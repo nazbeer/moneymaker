@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { prisma } from "../lib/prisma";
+import { prisma, withDates } from "../lib/prisma";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -13,9 +13,9 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "Prompt and content are required" });
     }
 
-    const entry = await prisma.journalEntry.create({
-      data: { userId, prompt, content, category: category || "reflection" },
-    });
+    const entry = await prisma.orm.public.JournalEntry
+      .create({ userId, prompt, content, category: category || "reflection" })
+      .then(withDates);
 
     return res.status(201).json(entry);
   } catch (error) {
@@ -35,14 +35,18 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
     if (category) where.category = category;
 
     const [entries, total] = await Promise.all([
-      prisma.journalEntry.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        select: { id: true, prompt: true, content: true, category: true, createdAt: true },
-      }),
-      prisma.journalEntry.count({ where }),
+      prisma.orm.public.JournalEntry
+        .where(where)
+        .orderBy((row) => row.createdAt.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .select("id", "prompt", "content", "category", "createdAt")
+        .all()
+        .then(withDates),
+      prisma.orm.public.JournalEntry
+        .where(where)
+        .aggregate((aggregate) => ({ count: aggregate.count() }))
+        .then((result) => result.count),
     ]);
 
     return res.json({ entries, total, page, totalPages: Math.ceil(total / limit) });
