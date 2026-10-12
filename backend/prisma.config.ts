@@ -8,4 +8,7 @@ export default definePrismaConfig({
     output: "src/prisma",
     db: { connection: process.env.DATABASE_URL },
   }),
+  skills: {
+    check: false,
+  },
 });
