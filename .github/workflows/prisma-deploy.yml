@@ -29,4 +29,4 @@ jobs:
       - uses: prisma/cloud-deploy-action@v1
         with:
           module: module.mjs
-          build-command: npm run build
+          build-command: npm run build && npm ci --prefix backend && npm --prefix backend run build
