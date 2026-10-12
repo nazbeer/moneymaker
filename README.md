@@ -1,5 +1,16 @@
 # HealMind
 
+## Prisma Cloud IaC scan
+
+The GitHub Actions scan requires repository Actions secrets
+`PRISMA_CLOUD_API_URL`, `PRISMA_CLOUD_ACCESS_KEY`, and `PRISMA_CLOUD_SECRET_KEY`
+for the Prisma Cloud security service (not the Prisma ORM or database platform).
+Configure them under **Settings → Secrets and variables → Actions**.
+If any are unavailable, including on fork pull requests, the workflow warns and
+skips scanning; a successful job in that case does not mean the code was scanned.
+When configured, scan failures still fail the job, and SARIF results are uploaded
+only when the scan produces a report.
+
 ## Web app and backend database
 
 Both applications use Prisma 8 (CLI `8.0.0-rc.22`, PostgreSQL runtime
