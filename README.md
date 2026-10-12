@@ -43,6 +43,12 @@ users, OAuth accounts, sessions, and verification tokens.
 For production schema changes, generate and review a migration with
 `npx prisma migration plan`, commit the migration, and deploy it with
 `npx prisma db migrate`. Do not initialize or reset a database containing data.
+Initial `init` migration packages and their contract snapshots are checked in
+under both `migrations/` and `backend/migrations/`. For a fresh deployment,
+run `npx prisma db migrate` from the application directory instead of the
+removed `prisma migrate dev` command. Both applications describe the same
+database: if they share one database, apply its migrations from only one
+application directory.
 See the [official migration guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql)
 for transferring migration ownership from an existing Prisma installation.
 
