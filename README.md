@@ -18,6 +18,17 @@ set `DATABASE_URL` to your PostgreSQL connection string in both directories.
 The backend also needs `JWT_SECRET` for registration/login. Deployment
 environments must supply these variables themselves. Never commit credentials.
 
+For local development, use the same working `DATABASE_URL` in `.env` and
+`backend/.env` when both applications share a database. A `role does not exist`
+connection error means PostgreSQL was reached, but the username in the URL is
+not a role on that server. Check which server is listening on port 5432:
+a local PostgreSQL installation and the Compose database cannot both bind that
+port. Commands run on the host connect to `localhost`; the Compose app connects
+to the `db` service. Compose's `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
+`POSTGRES_DB` initialize only a new database volume; changing them does not
+update an existing database. Do not delete a volume containing data to resolve
+a credentials mismatch.
+
 The schemas are now `src/prisma/contract.prisma` and
 `backend/src/prisma/contract.prisma`; keep the models synchronized. The generated
 `contract.json` and `contract.d.ts` next to each contract are required runtime
