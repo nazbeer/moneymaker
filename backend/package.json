@@ -34,6 +34,10 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
+  "overrides": {
+    "@effect/vitest": "4.0.0-rc.115",
+    "effect": "4.0.0-rc.115"
+  },
   "engines": {
     "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   }

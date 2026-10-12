@@ -6,6 +6,11 @@ Both applications use Prisma 8 (CLI `8.0.0-rc.22`, PostgreSQL runtime
 `8.0.0-rc.17`). These packages have independent release numbers; Prisma 8 is
 currently a release candidate. Use Node.js 22.18+, 24.11+, or 26+ (Node 24
 recommended). The Docker image uses Node 24.
+The package overrides pin Effect and its Vitest integration to Composer's
+compatible `4.0.0-rc.115` release. Without these pins, Prisma 8's transitive
+Alchemy dependency can select incompatible stable Effect packages and fail
+cloud installation with `ERESOLVE`. Keep the overrides until upstream packages
+agree on a compatible Effect version; do not bypass peer checks.
 
 Install from the repository root with `npm ci`, and install the separate
 backend with `cd backend && npm ci`. Each application loads its own `.env`;
