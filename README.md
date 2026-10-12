@@ -13,6 +13,12 @@ only when the scan produces a report.
 
 ## Web app and backend database
 
+Prisma Cloud deployment uses `module.mjs` to provision only the root Next.js
+app and the Express backend, with a database for each. The deployment workflow
+builds both applications before deploying. The independent `frontend-web` app
+and Expo mobile client remain outside this deployment; the mobile client is
+not a Node server.
+
 Both applications use Prisma 8 (CLI `8.0.0-rc.22`, PostgreSQL runtime
 `8.0.0-rc.17`). These packages have independent release numbers; Prisma 8 is
 currently a release candidate. Use Node.js 22.18+, 24.11+, or 26+ (Node 24
